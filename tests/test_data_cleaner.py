@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from src.data_cleaner import clean_data
+from src.data_cleaner import clean_data, fill_missing_values
 
 
 def test_clean_data():
@@ -38,3 +38,34 @@ def test_clean_data_does_not_modify_original():
 def test_clean_data_invalid_input():
     with pytest.raises(TypeError):
         clean_data("not a dataframe")
+
+
+def test_fill_missing_numeric_values():
+    df = pd.DataFrame(
+        {
+            "age": [20, 30, None, 40],
+        }
+    )
+
+    cleaned_df = fill_missing_values(df)
+
+    assert cleaned_df["age"].isnull().sum() == 0
+    assert cleaned_df["age"].iloc[2] == 30
+
+
+def test_fill_missing_categorical_values():
+    df = pd.DataFrame(
+        {
+            "city": ["Delhi", None, "Mumbai"],
+        }
+    )
+
+    cleaned_df = fill_missing_values(df)
+
+    assert cleaned_df["city"].isnull().sum() == 0
+    assert cleaned_df["city"].iloc[1] == "Unknown"
+
+
+def test_fill_missing_invalid_input():
+    with pytest.raises(TypeError):
+        fill_missing_values("not a dataframe")
