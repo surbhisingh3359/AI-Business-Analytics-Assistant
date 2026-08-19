@@ -1,3 +1,5 @@
+from unittest import result
+
 import pandas as pd
 
 from src.preprocessing import preprocess_data
@@ -17,3 +19,7 @@ def test_preprocess_data():
 
     assert result["schema"]["order_id"]["role"] == "identifier"
     assert result["schema"]["quantity"]["role"] == "numeric"
+    assert "quality_report" in result
+
+    assert result["quality_report"]["before"]["rows"] == 5
+    assert result["quality_report"]["after"]["rows"] == 5
