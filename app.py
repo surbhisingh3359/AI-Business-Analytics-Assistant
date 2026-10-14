@@ -34,6 +34,7 @@ from src.predictive_analysis import (
     run_prediction,
 )
 
+from ui.components import metric_card, section_header, status_badge
 
 APP_TITLE = "AI Business Analytics Copilot"
 APP_TAGLINE = "From raw data to insights, predictions, and decisions"
@@ -2001,30 +2002,35 @@ def view_overview(
             tone="success",
         )
 
-    render_metric_row(
-        [
-            (
-                "Key findings",
-                f"{int(result.get('insight_count', 0) or 0):,}",
-                "Prioritized business signals",
-            ),
-            (
-                "Recommended actions",
-                f"{int(result.get('decision_count', 0) or 0):,}",
-                "Evidence-backed decisions",
-            ),
-            (
-                "Analyses completed",
-                f"{len(completed) if isinstance(completed, list) else 0:,}",
-                "Validated analytical checks",
-            ),
-            (
-                "Items to review",
-                f"{len(skipped) if isinstance(skipped, list) else 0:,}",
-                "Insufficient evidence or support",
-            ),
-        ]
-    )
+        columns = st.columns(4)
+
+    with columns[0]:
+        metric_card(
+            "Key findings",
+            f"{int(result.get('insight_count', 0) or 0):,}",
+            "Prioritized business signals",
+        )
+
+    with columns[1]:
+        metric_card(
+            "Recommended actions",
+            f"{int(result.get('decision_count', 0) or 0):,}",
+            "Evidence-backed decisions",
+        )
+
+    with columns[2]:
+        metric_card(
+            "Analyses completed",
+            f"{len(completed) if isinstance(completed, list) else 0:,}",
+            "Validated analytical checks",
+        )
+
+    with columns[3]:
+        metric_card(
+            "Items to review",
+            f"{len(skipped) if isinstance(skipped, list) else 0:,}",
+            "Insufficient evidence or support",
+        )
 
     insights = result.get("insights", [])
     if isinstance(insights, list) and insights:
