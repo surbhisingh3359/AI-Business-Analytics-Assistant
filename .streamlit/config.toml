@@ -1,0 +1,65 @@
+# Streamlit theme configuration for the AI Business Analytics workspace.
+#
+# The dock and page surface are styled in app.py, but Streamlit renders its own
+# widgets, dataframes, and charts from this configuration, so both palettes are
+# declared here to keep the chrome consistent with the app surface. Leaving
+# theme.base unset lets Streamlit follow the browser or the user's choice in
+# Settings > Appearance; app.py mirrors both palettes behind a
+# prefers-color-scheme media query so the two stay in step.
+
+[theme]
+baseRadius = "large"
+buttonRadius = "large"
+showWidgetBorder = true
+# Chart colours are only read from the base section, so this palette is chosen
+# to stay legible on both the light and the dark background.
+chartCategoricalColors = [
+    "#5b7cfa",
+    "#a06bff",
+    "#12a06a",
+    "#d08700",
+    "#e04667",
+    "#0ea5c4",
+]
+
+[theme.dark]
+primaryColor = "#8ba7ff"
+backgroundColor = "#05070f"
+secondaryBackgroundColor = "#0e1424"
+textColor = "#eef2ff"
+borderColor = "#1e2740"
+linkColor = "#8ba7ff"
+codeBackgroundColor = "#0b1120"
+codeTextColor = "#c08bff"
+dataframeHeaderBackgroundColor = "#0e1424"
+dataframeBorderColor = "#1e2740"
+greenColor = "#4ade80"
+orangeColor = "#fbbf24"
+redColor = "#fb7185"
+blueColor = "#8ba7ff"
+
+[theme.dark.sidebar]
+backgroundColor = "#080c18"
+secondaryBackgroundColor = "#101729"
+borderColor = "#1e2740"
+
+[theme.light]
+primaryColor = "#3b5bdb"
+backgroundColor = "#f4f6fc"
+secondaryBackgroundColor = "#e9eefa"
+textColor = "#101a30"
+borderColor = "#d5dcec"
+linkColor = "#3b5bdb"
+codeBackgroundColor = "#eef1f9"
+codeTextColor = "#6d28d9"
+dataframeHeaderBackgroundColor = "#e9eefa"
+dataframeBorderColor = "#d5dcec"
+greenColor = "#0f8a5f"
+orangeColor = "#a35c05"
+redColor = "#c02a49"
+blueColor = "#3b5bdb"
+
+[theme.light.sidebar]
+backgroundColor = "#eef1f9"
+secondaryBackgroundColor = "#e2e8f6"
+borderColor = "#d9e0ef"

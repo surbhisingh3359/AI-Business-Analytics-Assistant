@@ -1,367 +1,842 @@
-import os
-import tempfile
+import io
+from typing import Any
 
+import pandas as pd
 import streamlit as st
 
-from src.preprocessing import preprocess_data
-from src.ai_context import build_ai_context
-from src.ai_analysis import analyze_business_data
-from src.visualizations import (
-    revenue_by_category,
-    revenue_by_product,
-    quantity_by_product,
+from src.business_analysis_pipeline import (
+    run_business_analysis,
 )
 
+
+# =========================================================
+# PAGE CONFIG
+# =========================================================
 
 st.set_page_config(
     page_title="AI Business Analytics Assistant",
     page_icon="📊",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 
-st.title("📊 AI Business Analytics Assistant")
+# =========================================================
+# CUSTOM CSS
+# =========================================================
 
-st.write(
-    "Upload a business CSV file and generate "
-    "data-driven business insights using local AI."
+st.markdown(
+    """
+    <style>
+        .main-title {
+            font-size: 2.4rem;
+            font-weight: 700;
+            margin-bottom: 0.2rem;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.05rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .section-title {
+            font-size: 1.35rem;
+            font-weight: 650;
+            margin-top: 1.5rem;
+            margin-bottom: 0.8rem;
+        }
+
+        .insight-card {
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            margin-bottom: 0.8rem;
+        }
+
+        .small-label {
+            color: #666;
+            font-size: 0.85rem;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
+
+# =========================================================
+# HEADER
+# =========================================================
+
+st.markdown(
+    '<div class="main-title">📊 AI Business Analytics Assistant</div>',
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    '<div class="subtitle">'
+    "Upload a dataset and turn raw business data into "
+    "insights, decisions, and executable analysis."
+    "</div>",
+    unsafe_allow_html=True,
+)
+
+
+# =========================================================
+# SIDEBAR
+# =========================================================
+
+with st.sidebar:
+
+    st.header("⚙️ Analysis Settings")
+
+    max_insights = st.slider(
+        "Maximum insights",
+        min_value=1,
+        max_value=10,
+        value=5,
+    )
+
+    max_decisions = st.slider(
+        "Maximum decisions",
+        min_value=1,
+        max_value=10,
+        value=5,
+    )
+
+    st.divider()
+
+    st.markdown(
+        """
+        **Pipeline**
+
+        Upload → Analyze → Insights → Decisions → Execution
+        """
+    )
+
+
+# =========================================================
+# FILE UPLOAD
+# =========================================================
 
 uploaded_file = st.file_uploader(
-    "Upload your CSV file",
+    "Upload a CSV dataset",
     type=["csv"],
+    help="Upload a business dataset in CSV format.",
 )
 
 
-if uploaded_file is not None:
+if uploaded_file is None:
 
-    st.success(f"Uploaded: {uploaded_file.name}")
+    st.info(
+        "Upload a CSV file to begin the analysis."
+    )
 
-    # ---------------------------------------------------------
-    # Save uploaded file temporarily
-    # ---------------------------------------------------------
+    st.markdown(
+        """
+        ### What this application does
 
-    with tempfile.NamedTemporaryFile(
-        delete=False,
-        suffix=".csv",
-    ) as temp_file:
+        **1. Understands your dataset**
+        Detects semantic roles and dataset characteristics.
 
-        temp_file.write(uploaded_file.getbuffer())
-        temp_file_path = temp_file.name
+        **2. Performs universal analytics**
+        Calculates summaries, relationships, group comparisons,
+        trends, and other applicable analyses.
 
-    try:
+        **3. Generates insights**
+        Converts analytical results into meaningful findings.
 
-        # -----------------------------------------------------
-        # Process uploaded CSV
-        # -----------------------------------------------------
+        **4. Ranks insights**
+        Prioritizes findings according to impact and confidence.
 
-        result = preprocess_data(temp_file_path)
+        **5. Creates business decisions**
+        Converts important findings into decision-oriented questions.
 
-        cleaned_df = result["data"]
-        quality_report = result["quality_report"]
+        **6. Executes recommended analysis**
+        Turns decisions into concrete analytical operations.
+        """
+    )
 
-        # -----------------------------------------------------
-        # Build business context
-        # -----------------------------------------------------
+    st.stop()
 
-        context = build_ai_context(cleaned_df)
 
-        summary = context["business_summary"]
-        insights = context["business_insights"]
+# =========================================================
+# READ DATASET
+# =========================================================
 
-        # -----------------------------------------------------
-        # Dataset Preview
-        # -----------------------------------------------------
+try:
 
-        st.subheader("📋 Dataset Preview")
+    file_bytes = uploaded_file.getvalue()
+
+    dataframe = pd.read_csv(
+        io.BytesIO(file_bytes)
+    )
+
+except Exception as exc:
+
+    st.error(
+        f"Unable to read the uploaded CSV: {exc}"
+    )
+
+    st.stop()
+
+
+# =========================================================
+# PREVIEW
+# =========================================================
+
+st.markdown(
+    '<div class="section-title">📄 Dataset Preview</div>',
+    unsafe_allow_html=True,
+)
+
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    st.metric(
+        "Rows",
+        f"{len(dataframe):,}",
+    )
+
+with col2:
+    st.metric(
+        "Columns",
+        f"{len(dataframe.columns):,}",
+    )
+
+with col3:
+    st.metric(
+        "Missing Cells",
+        f"{int(dataframe.isna().sum().sum()):,}",
+    )
+
+with col4:
+    st.metric(
+        "Duplicate Rows",
+        f"{int(dataframe.duplicated().sum()):,}",
+    )
+
+with st.expander(
+    "View uploaded data",
+    expanded=False,
+):
+    st.dataframe(
+        dataframe,
+        use_container_width=True,
+    )
+
+
+# =========================================================
+# ANALYZE BUTTON
+# =========================================================
+
+analyze_button = st.button(
+    "🚀 Analyze Dataset",
+    type="primary",
+    use_container_width=True,
+)
+
+
+if analyze_button:
+
+    with st.spinner(
+        "Running business analysis..."
+    ):
+
+        try:
+
+            result = run_business_analysis(
+                dataframe,
+                max_insights=max_insights,
+                max_decisions=max_decisions,
+            )
+
+        except Exception as exc:
+
+            st.error(
+                f"Analysis failed: {exc}"
+            )
+
+            st.exception(
+                exc
+            )
+
+            st.stop()
+
+    st.session_state[
+        "analysis_result"
+    ] = result
+
+
+# =========================================================
+# DISPLAY RESULTS
+# =========================================================
+
+result = st.session_state.get(
+    "analysis_result"
+)
+
+
+if result is None:
+    st.info(
+        "Click **Analyze Dataset** to generate the business analysis."
+    )
+
+    st.stop()
+
+
+# =========================================================
+# STATUS
+# =========================================================
+
+status = result.get(
+    "status",
+    "unknown",
+)
+
+if status == "completed":
+
+    st.success(
+        "Analysis completed successfully."
+    )
+
+elif status == "completed_with_errors":
+
+    st.warning(
+        "Analysis completed, but some recommended analyses failed."
+    )
+
+else:
+
+    st.info(
+        f"Analysis status: {status}"
+    )
+
+
+# =========================================================
+# EXECUTIVE OVERVIEW
+# =========================================================
+
+st.markdown(
+    '<div class="section-title">📌 Executive Overview</div>',
+    unsafe_allow_html=True,
+)
+
+overview_col1, overview_col2, overview_col3, overview_col4 = (
+    st.columns(4)
+)
+
+with overview_col1:
+
+    st.metric(
+        "Insights",
+        result.get(
+            "insight_count",
+            0,
+        ),
+    )
+
+with overview_col2:
+
+    st.metric(
+        "Decisions",
+        result.get(
+            "decision_count",
+            0,
+        ),
+    )
+
+with overview_col3:
+
+    st.metric(
+        "Executions",
+        result.get(
+            "execution_count",
+            0,
+        ),
+    )
+
+with overview_col4:
+
+    st.metric(
+        "Successful Executions",
+        len(
+            result.get(
+                "completed_executions",
+                [],
+            )
+        ),
+    )
+
+
+# =========================================================
+# DATASET INFORMATION
+# =========================================================
+
+with st.expander(
+    "🔎 Dataset Information",
+    expanded=False,
+):
+
+    dataset_info = result.get(
+        "dataset",
+        {},
+    )
+
+    st.json(
+        dataset_info
+    )
+
+
+# =========================================================
+# SEMANTIC ROLES
+# =========================================================
+
+with st.expander(
+    "🧠 Detected Semantic Roles",
+    expanded=False,
+):
+
+    semantic_roles = result.get(
+        "semantic_roles",
+        {},
+    )
+
+    if semantic_roles:
+
+        role_df = pd.DataFrame(
+            [
+                {
+                    "Column": column,
+                    "Role": role,
+                }
+                for column, role
+                in semantic_roles.items()
+            ]
+        )
 
         st.dataframe(
-            cleaned_df,
+            role_df,
             use_container_width=True,
         )
 
-        # -----------------------------------------------------
-        # Business KPIs
-        # -----------------------------------------------------
+    else:
 
-        st.subheader("📊 Business Performance")
-
-        col1, col2, col3, col4 = st.columns(4)
-
-        with col1:
-            st.metric(
-                "Total Revenue",
-                f"₹{summary['total_revenue']:,.2f}",
-            )
-
-        with col2:
-            st.metric(
-                "Total Orders",
-                f"{summary['total_orders']:,}",
-            )
-
-        with col3:
-            st.metric(
-                "Quantity Sold",
-                f"{summary['total_quantity']:,}",
-            )
-
-        with col4:
-            st.metric(
-                "Average Order Value",
-                f"₹{summary['average_order_value']:,.2f}",
-            )
-
-        # -----------------------------------------------------
-        # Top Business Performers
-        # -----------------------------------------------------
-
-        st.subheader("🏆 Top Business Performers")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-
-            st.markdown("### 🛒 Top Product")
-
-            st.write(
-                f"**{summary['top_product']['product']}**"
-            )
-
-            st.write(
-                f"Revenue: ₹"
-                f"{summary['top_product']['revenue']:,.2f}"
-            )
-
-        with col2:
-
-            st.markdown("### 📦 Top Category")
-
-            st.write(
-                f"**{summary['top_category']['category']}**"
-            )
-
-            st.write(
-                f"Revenue: ₹"
-                f"{summary['top_category']['revenue']:,.2f}"
-            )
-
-        # -----------------------------------------------------
-        # Business Insights
-        # -----------------------------------------------------
-
-        st.subheader("💡 Business Insights")
-
-        top_category = insights["top_category"]
-        top_product = insights["top_product"]
-
-        st.write(
-            f"**Top Category:** {top_category['category']}"
+        st.info(
+            "No semantic role information available."
         )
 
-        st.write(
-            f"Category Revenue Contribution: "
-            f"{top_category['contribution_percentage']:.2f}%"
+
+# =========================================================
+# ANALYSIS PLAN
+# =========================================================
+
+with st.expander(
+    "🗂️ Analysis Plan",
+    expanded=False,
+):
+
+    analysis_plan = result.get(
+        "analysis_plan",
+        {},
+    )
+
+    st.json(
+        analysis_plan
+    )
+
+
+# =========================================================
+# KEY INSIGHTS
+# =========================================================
+
+st.markdown(
+    '<div class="section-title">💡 Key Insights</div>',
+    unsafe_allow_html=True,
+)
+
+insights = result.get(
+    "insights",
+    [],
+)
+
+if not insights:
+
+    st.info(
+        "No significant insights were generated."
+    )
+
+else:
+
+    for index, insight in enumerate(
+        insights,
+        start=1,
+    ):
+
+        priority = str(
+            insight.get(
+                "priority",
+                "medium",
+            )
+        ).upper()
+
+        insight_type = str(
+            insight.get(
+                "type",
+                "general",
+            )
         )
 
-        st.write(
-            f"**Top Product:** {top_product['product']}"
+        title = insight.get(
+            "title",
+            "Untitled Insight",
         )
 
-        st.write(
-            f"Product Revenue Concentration: "
-            f"{top_product['concentration_percentage']:.2f}%"
+        finding = insight.get(
+            "finding",
+            "",
         )
 
-        risk_level = top_product["risk_level"]
+        with st.container(
+            border=True
+        ):
 
-        if risk_level == "high":
-
-            st.error(
-                f"⚠️ Revenue Concentration Risk: "
-                f"{risk_level.upper()}"
+            st.markdown(
+                f"### {index}. {title}"
             )
 
-        elif risk_level == "medium":
+            meta_col1, meta_col2 = st.columns(2)
 
-            st.warning(
-                f"⚠️ Revenue Concentration Risk: "
-                f"{risk_level.upper()}"
+            with meta_col1:
+                st.caption(
+                    f"Priority: {priority}"
+                )
+
+            with meta_col2:
+                st.caption(
+                    f"Type: {insight_type}"
+                )
+
+            st.write(
+                finding
+            )
+
+            metric = insight.get(
+                "metric"
+            )
+
+            category = insight.get(
+                "category"
+            )
+
+            if metric or category:
+
+                metadata = []
+
+                if metric:
+                    metadata.append(
+                        f"Metric: `{metric}`"
+                    )
+
+                if category:
+                    metadata.append(
+                        f"Dimension: `{category}`"
+                    )
+
+                st.caption(
+                    " • ".join(metadata)
+                )
+
+
+# =========================================================
+# BUSINESS DECISIONS
+# =========================================================
+
+st.markdown(
+    '<div class="section-title">🎯 Business Decisions</div>',
+    unsafe_allow_html=True,
+)
+
+decisions = result.get(
+    "decisions",
+    [],
+)
+
+if not decisions:
+
+    st.info(
+        "No business decisions were generated."
+    )
+
+else:
+
+    for index, decision in enumerate(
+        decisions,
+        start=1,
+    ):
+
+        with st.container(
+            border=True
+        ):
+
+            st.markdown(
+                f"### Decision {index}"
+            )
+
+            st.write(
+                decision.get(
+                    "decision",
+                    "",
+                )
+            )
+
+            rec_col1, rec_col2 = st.columns(2)
+
+            with rec_col1:
+
+                st.caption(
+                    "Recommended Analysis"
+                )
+
+                st.code(
+                    decision.get(
+                        "recommended_analysis",
+                        "N/A",
+                    )
+                )
+
+            with rec_col2:
+
+                st.caption(
+                    "Confidence"
+                )
+
+                st.write(
+                    decision.get(
+                        "confidence",
+                        "N/A",
+                    )
+                )
+
+            metrics = decision.get(
+                "metrics",
+                [],
+            )
+
+            dimensions = decision.get(
+                "dimensions",
+                [],
+            )
+
+            if metrics:
+
+                st.caption(
+                    "Metrics: "
+                    + ", ".join(
+                        str(item)
+                        for item in metrics
+                    )
+                )
+
+            if dimensions:
+
+                st.caption(
+                    "Dimensions: "
+                    + ", ".join(
+                        str(item)
+                        for item in dimensions
+                    )
+                )
+
+            limitations = decision.get(
+                "limitations",
+                [],
+            )
+
+            if limitations:
+
+                with st.expander(
+                    "Analysis limitations"
+                ):
+
+                    for limitation in limitations:
+
+                        st.write(
+                            f"- {limitation}"
+                        )
+
+
+# =========================================================
+# EXECUTION RESULTS
+# =========================================================
+
+st.markdown(
+    '<div class="section-title">⚙️ Executed Analysis</div>',
+    unsafe_allow_html=True,
+)
+
+execution_results = result.get(
+    "execution_results",
+    [],
+)
+
+if not execution_results:
+
+    st.info(
+        "No execution results available."
+    )
+
+else:
+
+    for index, execution in enumerate(
+        execution_results,
+        start=1,
+    ):
+
+        execution_status = execution.get(
+            "status",
+            "unknown",
+        )
+
+        if execution_status == "completed":
+
+            st.success(
+                f"Execution {index}: completed"
             )
 
         else:
 
-            st.success(
-                f"Revenue Concentration Risk: "
-                f"{risk_level.upper()}"
+            st.error(
+                f"Execution {index}: failed"
             )
 
-        st.info(
-            insights["product_concentration_insight"]
+        decision = execution.get(
+            "decision",
+            {},
         )
 
-        # -----------------------------------------------------
-        # Business Visualizations
-        # -----------------------------------------------------
-
-        st.subheader("📈 Business Visualizations")
-
-        category_revenue = revenue_by_category(
-            cleaned_df
+        plan = execution.get(
+            "plan",
+            {},
         )
 
-        product_revenue = revenue_by_product(
-            cleaned_df
+        execution_result = execution.get(
+            "result",
         )
 
-        product_quantity = quantity_by_product(
-            cleaned_df
-        )
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-
-            st.markdown("#### Revenue by Category")
-
-            st.bar_chart(
-                category_revenue.set_index(
-                    "category"
-                )["revenue"]
-            )
-
-        with col2:
-
-            st.markdown("#### Revenue by Product")
-
-            st.bar_chart(
-                product_revenue.set_index(
-                    "product"
-                )["revenue"]
-            )
-
-        st.markdown("#### Quantity Sold by Product")
-
-        st.bar_chart(
-            product_quantity.set_index(
-                "product"
-            )["quantity"]
-        )
-
-        # -----------------------------------------------------
-        # AI Business Analysis
-        # -----------------------------------------------------
-
-        st.subheader("🤖 AI Business Analysis")
-
-        if st.button(
-            "Generate AI Business Analysis",
-            type="primary",
+        with st.expander(
+            f"Execution {index}: "
+            f"{plan.get('analysis_type', 'Unknown')}"
         ):
 
-            with st.spinner(
-                "Analyzing your business data with local AI..."
+            st.markdown(
+                "**Decision**"
+            )
+
+            st.write(
+                decision.get(
+                    "decision",
+                    "",
+                )
+            )
+
+            st.markdown(
+                "**Execution Plan**"
+            )
+
+            st.json(
+                plan
+            )
+
+            if execution_result is not None:
+
+                st.markdown(
+                    "**Result**"
+                )
+
+                st.json(
+                    execution_result
+                )
+
+            if execution.get(
+                "error"
             ):
 
-                try:
+                st.error(
+                    execution["error"]
+                )
 
-                    ai_result = analyze_business_data(
-                        temp_file_path
-                    )
 
-                    # ---------------------------------------------
-                    # AI Analysis
-                    # ---------------------------------------------
+# =========================================================
+# BUSINESS QUESTIONS
+# =========================================================
 
-                    st.markdown(
-                        ai_result["analysis"]
-                    )
+business_questions = result.get(
+    "business_questions",
+    [],
+)
 
-                    # ---------------------------------------------
-                    # AI Validation
-                    # ---------------------------------------------
+if business_questions:
 
-                    validation = ai_result["validation"]
+    st.markdown(
+        '<div class="section-title">❓ Business Questions</div>',
+        unsafe_allow_html=True,
+    )
 
-                    st.divider()
+    for question in business_questions:
 
-                    st.subheader(
-                        "🛡️ AI Response Quality"
-                    )
+        if isinstance(
+            question,
+            dict,
+        ):
 
-                    if validation["is_valid"]:
-
-                        st.success(
-                            "✅ AI analysis passed validation."
-                        )
-
-                    else:
-
-                        st.warning(
-                            "⚠️ AI analysis requires review."
-                        )
-
-                        with st.expander(
-                            "View validation warnings"
-                        ):
-
-                            for warning in validation["warnings"]:
-
-                                st.write(
-                                    f"- {warning}"
-                                )
-
-                    if validation["has_recommendations"]:
-
-                        st.info(
-                            "💡 Actionable recommendations detected."
-                        )
-
-                except Exception as e:
-
-                    st.error(
-                        f"AI analysis failed: {e}"
-                    )
-
-        # -----------------------------------------------------
-        # Data Quality
-        # -----------------------------------------------------
-
-        st.subheader("🧹 Data Quality")
-
-        quality_col1, quality_col2, quality_col3 = st.columns(3)
-
-        with quality_col1:
-
-            st.metric(
-                "Rows Before Cleaning",
-                quality_report["before"]["rows"],
+            text = (
+                question.get(
+                    "question"
+                )
+                or question.get(
+                    "business_question"
+                )
+                or str(question)
             )
 
-        with quality_col2:
+        else:
 
-            st.metric(
-                "Rows After Cleaning",
-                quality_report["after"]["rows"],
+            text = str(
+                question
             )
 
-        with quality_col3:
-
-            st.metric(
-                "Duplicates Removed",
-                quality_report["before"]["duplicates"]
-                - quality_report["after"]["duplicates"],
-            )
-
-    except Exception as e:
-
-        st.error(
-            f"Unable to process the uploaded file: {e}"
+        st.write(
+            f"• {text}"
         )
 
-    finally:
 
-        if os.path.exists(temp_file_path):
+# =========================================================
+# RAW ANALYTICS
+# =========================================================
 
-            os.remove(temp_file_path)
+with st.expander(
+    "📊 Raw Analytics",
+    expanded=False,
+):
+
+    analytics = result.get(
+        "analytics",
+        {},
+    )
+
+    st.json(
+        analytics
+    )
+
+
+# =========================================================
+# FOOTER
+# =========================================================
+
+st.divider()
+
+st.caption(
+    "AI Business Analytics Assistant • "
+    "Deterministic analytical core"
+)

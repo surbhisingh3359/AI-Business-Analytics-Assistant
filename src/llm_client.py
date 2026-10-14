@@ -1,11 +1,13 @@
+import os
+
 import ollama
 
 
 class LLMClient:
     """Client for generating business analysis using a local Ollama model."""
 
-    def __init__(self, model: str = "qwen2.5:3b"):
-        self.model = model
+    def __init__(self, model: str | None = None):
+        self.model = model or os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 
     def generate(self, prompt: str) -> str:
         """Generate an AI response using the local Ollama model."""

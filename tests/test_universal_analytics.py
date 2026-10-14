@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -394,7 +395,75 @@ def test_group_comparison_identifies_strongest_difference():
     assert comparison["metric"] == "salary"
     assert comparison["highest_group"] == "IT"
     assert comparison["lowest_group"] == "HR"
+
+    # The gap is large (80%), but two rows per group cannot support a
+    # confident claim. Magnitude alone must not drive the grade.
+    assert comparison["significance"] == "low"
+
+    statistics = comparison["statistics"]
+
+    assert statistics["test"] == "One-way ANOVA"
+    assert statistics["n"] == 6
+    assert statistics["smallest_group"] == 2
+    assert statistics["underpowered"] is True
+    assert statistics["effect_label"] == "large"
+
+
+def test_group_comparison_reaches_high_confidence_with_enough_rows():
+    """The same pattern, adequately sampled, should be reported confidently."""
+
+    rng = np.random.default_rng(3)
+
+    df = pd.DataFrame(
+        {
+            "department": (
+                ["IT"] * 40
+                + ["HR"] * 40
+                + ["Finance"] * 40
+            ),
+            "salary": np.concatenate(
+                [
+                    rng.normal(92000, 4000, 40),
+                    rng.normal(51000, 4000, 40),
+                    rng.normal(66000, 4000, 40),
+                ]
+            ),
+        }
+    )
+
+    roles = {
+        "department": "categorical",
+        "salary": "monetary",
+    }
+
+    plan = {
+        "analyses": [
+            "group_comparison_analysis",
+        ],
+        "columns_by_role": {
+            "categorical": ["department"],
+            "monetary": ["salary"],
+        },
+    }
+
+    result = analyze_dataset(
+        df,
+        roles,
+        plan,
+    )
+
+    comparison = result["group_comparisons"][0]
+
     assert comparison["significance"] == "high"
+
+    statistics = comparison["statistics"]
+
+    assert statistics["n"] == 120
+    assert statistics["underpowered"] is False
+    assert statistics["p_value"] < 0.001
+    assert statistics["q_value"] < 0.001
+    assert statistics["effect_label"] == "large"
+    assert statistics["robustness_test"] == "Kruskal-Wallis"
 
 
 def test_group_comparison_ignores_small_differences():

@@ -2,6 +2,39 @@ from typing import Any
 
 import pandas as pd
 
+from src.significance import (
+    apply_fdr_correction,
+    test_correlation,
+    test_group_difference,
+)
+
+
+def _apply_group_correction(
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """
+    Adjust every group comparison for the number of comparisons run.
+
+    The scan tests each viable category-by-metric pair, so some pairs will
+    clear p < 0.05 by chance alone. Benjamini-Hochberg converts the raw
+    p-values into q-values and the confidence grade is recomputed from
+    those, which demotes findings that only survived because the search
+    was wide.
+    """
+
+    if not candidates:
+        return candidates
+
+    corrected_statistics = apply_fdr_correction(
+        [item["statistics"] for item in candidates]
+    )
+
+    for item, statistics in zip(candidates, corrected_statistics):
+        item["statistics"] = statistics
+        item["significance"] = statistics["confidence"]
+
+    return candidates
+
 
 def _numeric_summary(
     df: pd.DataFrame,
@@ -119,6 +152,65 @@ def _correlation_analysis(
     return result
 
 
+def _correlation_tests(
+    df: pd.DataFrame,
+    columns: list[str],
+) -> list[dict[str, Any]]:
+    """
+    Test each numeric pair instead of only reporting the coefficient.
+
+    A correlation matrix says how strong a relationship looks; it does not
+    say how many rows produced it or whether it would survive a reshuffle.
+    Each pair here carries its own p-value, pairwise-complete n, and a
+    Spearman cross-check, then the whole family is FDR-corrected because
+    every pair was tested.
+    """
+
+    if len(columns) < 2:
+        return []
+
+    results: list[dict[str, Any]] = []
+
+    for index, first_column in enumerate(columns):
+
+        if first_column not in df.columns:
+            continue
+
+        for second_column in columns[index + 1:]:
+
+            if second_column not in df.columns:
+                continue
+
+            verdict = test_correlation(
+                df,
+                first_column,
+                second_column,
+            )
+
+            results.append(
+                {
+                    "first_column": str(first_column),
+                    "second_column": str(second_column),
+                    "coefficient": verdict.get("effect_size"),
+                    "statistics": verdict,
+                }
+            )
+
+    corrected = apply_fdr_correction(
+        [item["statistics"] for item in results]
+    )
+
+    for item, statistics in zip(results, corrected):
+        item["statistics"] = statistics
+
+    results.sort(
+        key=lambda item: abs(item["coefficient"] or 0.0),
+        reverse=True,
+    )
+
+    return results
+
+
 def _group_comparison(
     df: pd.DataFrame,
     categorical_columns: list[str],
@@ -223,22 +315,25 @@ def _group_comparison(
                     * 100
                 )
 
-            # Ignore insignificant differences.
+            # Ignore differences too small to be worth reporting even if
+            # they turn out to be statistically detectable.
             if percentage_gap < 5:
                 continue
 
             # -------------------------------------------------
-            # Determine significance
+            # Test the difference rather than assuming it
             # -------------------------------------------------
 
-            if percentage_gap >= 50:
-                significance = "high"
-
-            elif percentage_gap >= 20:
-                significance = "medium"
-
-            else:
-                significance = "low"
+            verdict = test_group_difference(
+                comparison_df.rename(
+                    columns={
+                        "category": category,
+                        "value": metric,
+                    }
+                ),
+                category,
+                metric,
+            )
 
             candidates.append(
                 {
@@ -252,9 +347,18 @@ def _group_comparison(
                     "percentage_gap": float(
                         percentage_gap
                     ),
-                    "significance": significance,
+                    # Kept for backward compatibility, but now derived
+                    # from the test rather than from the gap size.
+                    "significance": verdict["confidence"],
+                    "statistics": verdict,
                 }
             )
+
+    # ---------------------------------------------------------
+    # Correct for having tested every viable pair
+    # ---------------------------------------------------------
+
+    candidates = _apply_group_correction(candidates)
 
     # ---------------------------------------------------------
     # Rank comparisons by importance
@@ -264,6 +368,7 @@ def _group_comparison(
         "high": 3,
         "medium": 2,
         "low": 1,
+        "insufficient": 0,
     }
 
     candidates.sort(
@@ -271,6 +376,12 @@ def _group_comparison(
             significance_weight.get(
                 item["significance"],
                 0,
+            ),
+            abs(
+                item["statistics"].get(
+                    "effect_size",
+                )
+                or 0.0
             ),
             item["percentage_gap"],
         ),
@@ -403,6 +514,7 @@ def analyze_dataset(
         "categorical_summary": {},
         "datetime_summary": {},
         "correlations": {},
+        "correlation_tests": [],
         "group_comparisons": {},
     }
 
@@ -431,6 +543,11 @@ def analyze_dataset(
 
     if "correlation_analysis" in analyses:
         results["correlations"] = _correlation_analysis(
+            df,
+            quantitative_columns,
+        )
+
+        results["correlation_tests"] = _correlation_tests(
             df,
             quantitative_columns,
         )

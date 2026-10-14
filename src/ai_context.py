@@ -14,77 +14,133 @@ def _build_business_compatibility_context(
     df: pd.DataFrame,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """
-    Build the legacy business_summary and business_insights
-    structures required by the existing prompt and validation
-    pipeline.
+    Build backward-compatible business_summary and business_insights.
 
-    This is intentionally used as a compatibility layer.
+    This layer is intentionally adaptive.
 
-    It activates only when the dataset contains recognizable
-    business columns. The main analytics pipeline remains
-    dataset-agnostic.
+    It supports common schemas such as:
+
+    Sales:
+        order_id, quantity, price
+
+    Online Retail:
+        InvoiceNo, StockCode, Description,
+        Quantity, UnitPrice, InvoiceDate, CustomerID
+
+    HR:
+        employee_id, department, salary
+
+    Generic datasets:
+        numeric and categorical columns
+
+    The universal analytics pipeline remains dataset-agnostic.
     """
 
-    summary: dict[str, Any] = {
-        "total_orders": int(len(df)),
-    }
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("df must be a pandas DataFrame.")
 
-    insights: dict[str, Any] = {
-        "top_category": None,
-        "top_product": None,
-    }
+    if df.empty:
+        return (
+            {
+                "total_revenue": 0.0,
+                "total_orders": 0,
+                "total_quantity": 0,
+                "average_order_value": 0.0,
+            },
+            {
+                "top_category": None,
+                "top_product": None,
+            },
+        )
+
+    # ---------------------------------------------------------
+    # Normalize column names for detection
+    # ---------------------------------------------------------
 
     columns = {
         str(column).strip().lower(): column
         for column in df.columns
     }
 
+    def find_column(*names: str):
+        """
+        Return the first matching real DataFrame column.
+        """
+        for name in names:
+            normalized = name.strip().lower()
+
+            if normalized in columns:
+                return columns[normalized]
+
+        return None
+
     # ---------------------------------------------------------
-    # Quantity
+    # Detect common semantic columns
     # ---------------------------------------------------------
 
-    quantity_column = None
+    order_column = find_column(
+        "order_id",
+        "orderid",
+        "invoice_no",
+        "invoiceno",
+        "invoice",
+        "transaction_id",
+        "transactionid",
+        "receipt_id",
+    )
 
-    for name in (
+    quantity_column = find_column(
         "quantity",
         "qty",
         "units",
         "unit_quantity",
-    ):
-        if name in columns:
-            quantity_column = columns[name]
-            break
+        "units_sold",
+        "quantity_sold",
+    )
 
-    if quantity_column is not None:
-
-        quantity_values = pd.to_numeric(
-            df[quantity_column],
-            errors="coerce",
-        )
-
-        summary["total_quantity"] = int(
-            quantity_values.fillna(0).sum()
-        )
-
-    else:
-        summary["total_quantity"] = 0
-
-    # ---------------------------------------------------------
-    # Monetary value
-    # ---------------------------------------------------------
-
-    price_column = None
-
-    for name in (
+    price_column = find_column(
         "price",
+        "unitprice",
+        "unit_price",
+        "unit cost",
+        "unit_cost",
         "revenue",
         "sales",
         "amount",
         "value",
-    ):
-        if name in columns:
-            price_column = columns[name]
-            break
+        "total_price",
+        "total_sales",
+    )
+
+    product_column = find_column(
+        "product",
+        "product_name",
+        "productname",
+        "item",
+        "item_name",
+        "description",
+        "stockcode",
+        "stock_code",
+        "sku",
+        "product_id",
+        "productid",
+    )
+
+    category_column = find_column(
+        "category",
+        "product_category",
+        "department",
+        "segment",
+        "group",
+        "class",
+        "type",
+    )
+
+    # ---------------------------------------------------------
+    # Detect revenue
+    # ---------------------------------------------------------
+
+    revenue = None
 
     if price_column is not None:
 
@@ -93,7 +149,6 @@ def _build_business_compatibility_context(
             errors="coerce",
         ).fillna(0)
 
-        # If quantity exists, calculate line-level revenue.
         if quantity_column is not None:
 
             quantity_values = pd.to_numeric(
@@ -102,194 +157,331 @@ def _build_business_compatibility_context(
             ).fillna(0)
 
             revenue = (
-                quantity_values * price_values
+                quantity_values
+                * price_values
             )
 
         else:
+
             revenue = price_values
 
-        summary["total_revenue"] = float(
+    # ---------------------------------------------------------
+    # Total quantity
+    # ---------------------------------------------------------
+
+    if quantity_column is not None:
+
+        quantity_values = pd.to_numeric(
+            df[quantity_column],
+            errors="coerce",
+        ).fillna(0)
+
+        total_quantity = float(
+            quantity_values.sum()
+        )
+
+    else:
+
+        total_quantity = 0.0
+
+    # ---------------------------------------------------------
+    # Total orders
+    # ---------------------------------------------------------
+
+    if order_column is not None:
+
+        order_values = df[order_column].dropna()
+
+        # Count unique orders/invoices rather than rows.
+        total_orders = int(
+            order_values.nunique()
+        )
+
+    else:
+
+        # Backward-compatible fallback.
+        total_orders = int(len(df))
+
+    # ---------------------------------------------------------
+    # Total revenue
+    # ---------------------------------------------------------
+
+    if revenue is not None:
+
+        total_revenue = float(
             revenue.sum()
         )
 
+    else:
+
+        total_revenue = 0.0
+
     # ---------------------------------------------------------
-    # Top category
+    # Average order value
     # ---------------------------------------------------------
 
-    category_column = None
+    if total_orders > 0:
 
-    for name in (
-        "category",
-        "product_category",
-        "department",
-        "segment",
-        "group",
-    ):
-        if name in columns:
-            category_column = columns[name]
-            break
+        average_order_value = (
+            total_revenue
+            / total_orders
+        )
+
+    else:
+
+        average_order_value = 0.0
+
+    # ---------------------------------------------------------
+    # Business summary
+    # ---------------------------------------------------------
+
+    summary: dict[str, Any] = {
+        "total_revenue": total_revenue,
+        "total_orders": total_orders,
+        "total_quantity": int(total_quantity),
+        "average_order_value": float(
+            average_order_value
+        ),
+    }
+
+    # ---------------------------------------------------------
+    # Initialize insights
+    # ---------------------------------------------------------
+
+    insights: dict[str, Any] = {
+        "top_category": None,
+        "top_product": None,
+    }
+
+    # =========================================================
+    # TOP CATEGORY
+    # =========================================================
 
     if category_column is not None:
 
-        category_data = df[
-            [category_column]
-        ].copy()
+        category_data = pd.DataFrame(
+            {
+                "category": df[category_column]
+            }
+        )
 
-        if quantity_column is not None:
-            category_data["_quantity"] = pd.to_numeric(
-                df[quantity_column],
-                errors="coerce",
-            ).fillna(0)
+        # Revenue-based category analysis
+        if revenue is not None:
 
-        if price_column is not None:
-            category_data["_price"] = pd.to_numeric(
-                df[price_column],
-                errors="coerce",
-            ).fillna(0)
-
-        if (
-            quantity_column is not None
-            and price_column is not None
-        ):
-            category_data["_value"] = (
-                category_data["_quantity"]
-                * category_data["_price"]
+            category_data["value"] = (
+                revenue.values
             )
 
-            category_totals = (
-                category_data
-                .groupby(category_column)["_value"]
-                .sum()
-                .sort_values(ascending=False)
-            )
-
+        # Quantity-based category analysis
         elif quantity_column is not None:
 
-            category_totals = (
-                category_data
-                .groupby(category_column)["_quantity"]
-                .sum()
-                .sort_values(ascending=False)
+            category_data["value"] = (
+                quantity_values.values
             )
 
-        elif price_column is not None:
-
-            category_totals = (
-                category_data
-                .groupby(category_column)["_price"]
-                .sum()
-                .sort_values(ascending=False)
-            )
-
+        # Frequency-based category analysis
         else:
 
+            category_data["value"] = 1.0
+
+        category_data = category_data.dropna(
+            subset=["category"]
+        )
+
+        if not category_data.empty:
+
             category_totals = (
-                df[category_column]
-                .value_counts()
+                category_data
+                .groupby("category")["value"]
+                .sum()
+                .sort_values(
+                    ascending=False
+                )
             )
 
-        if not category_totals.empty:
+            if not category_totals.empty:
 
-            top_category = category_totals.index[0]
+                top_category = (
+                    category_totals.index[0]
+                )
 
-            insights["top_category"] = {
-                "category": str(top_category),
-                "value": float(
+                top_category_value = float(
                     category_totals.iloc[0]
-                ),
-            }
+                )
 
-    # ---------------------------------------------------------
-    # Top product
-    # ---------------------------------------------------------
+                if total_revenue > 0 and revenue is not None:
 
-    product_column = None
+                    contribution_percentage = (
+                        top_category_value
+                        / total_revenue
+                        * 100
+                    )
 
-    for name in (
-        "product",
-        "product_name",
-        "item",
-        "item_name",
-    ):
-        if name in columns:
-            product_column = columns[name]
-            break
+                elif (
+                    total_quantity > 0
+                    and quantity_column is not None
+                ):
+
+                    contribution_percentage = (
+                        top_category_value
+                        / total_quantity
+                        * 100
+                    )
+
+                else:
+
+                    contribution_percentage = (
+                        top_category_value
+                        / len(df)
+                        * 100
+                    )
+
+                insights["top_category"] = {
+                    "category": str(
+                        top_category
+                    ),
+                    "value": top_category_value,
+                    "revenue": (
+                        top_category_value
+                        if revenue is not None
+                        else 0.0
+                    ),
+                    "contribution_percentage": float(
+                        contribution_percentage
+                    ),
+                }
+
+    # =========================================================
+    # TOP PRODUCT
+    # =========================================================
 
     if product_column is not None:
 
-        product_data = df[
-            [product_column]
-        ].copy()
+        product_data = pd.DataFrame(
+            {
+                "product": df[product_column]
+            }
+        )
 
-        if quantity_column is not None:
-            product_data["_quantity"] = pd.to_numeric(
-                df[quantity_column],
-                errors="coerce",
-            ).fillna(0)
+        # Revenue-based product analysis
+        if revenue is not None:
 
-        if price_column is not None:
-            product_data["_price"] = pd.to_numeric(
-                df[price_column],
-                errors="coerce",
-            ).fillna(0)
-
-        # Prefer revenue/value when both quantity and price
-        # are available.
-        if (
-            quantity_column is not None
-            and price_column is not None
-        ):
-
-            product_data["_value"] = (
-                product_data["_quantity"]
-                * product_data["_price"]
+            product_data["value"] = (
+                revenue.values
             )
 
-            product_totals = (
-                product_data
-                .groupby(product_column)["_value"]
-                .sum()
-                .sort_values(ascending=False)
-            )
-
+        # Quantity-based product analysis
         elif quantity_column is not None:
 
-            product_totals = (
-                product_data
-                .groupby(product_column)["_quantity"]
-                .sum()
-                .sort_values(ascending=False)
+            product_data["value"] = (
+                quantity_values.values
             )
 
-        elif price_column is not None:
-
-            product_totals = (
-                product_data
-                .groupby(product_column)["_price"]
-                .sum()
-                .sort_values(ascending=False)
-            )
-
+        # Frequency-based product analysis
         else:
 
+            product_data["value"] = 1.0
+
+        product_data = product_data.dropna(
+            subset=["product"]
+        )
+
+        if not product_data.empty:
+
             product_totals = (
-                df[product_column]
-                .value_counts()
+                product_data
+                .groupby("product")["value"]
+                .sum()
+                .sort_values(
+                    ascending=False
+                )
             )
 
-        if not product_totals.empty:
+            if not product_totals.empty:
 
-            top_product = product_totals.index[0]
+                top_product = (
+                    product_totals.index[0]
+                )
 
-            insights["top_product"] = {
-                "product": str(top_product),
-                "value": float(
+                top_product_value = float(
                     product_totals.iloc[0]
-                ),
-            }
+                )
+
+                if total_revenue > 0 and revenue is not None:
+
+                    concentration_percentage = (
+                        top_product_value
+                        / total_revenue
+                        * 100
+                    )
+
+                    risk_level = (
+                        "high"
+                        if concentration_percentage >= 50
+                        else "medium"
+                        if concentration_percentage >= 25
+                        else "low"
+                    )
+
+                elif (
+                    total_quantity > 0
+                    and quantity_column is not None
+                ):
+
+                    concentration_percentage = (
+                        top_product_value
+                        / total_quantity
+                        * 100
+                    )
+
+                    risk_level = (
+                        "high"
+                        if concentration_percentage >= 50
+                        else "medium"
+                        if concentration_percentage >= 25
+                        else "low"
+                    )
+
+                else:
+
+                    concentration_percentage = (
+                        top_product_value
+                        / len(df)
+                        * 100
+                    )
+
+                    risk_level = "unknown"
+
+                insights["top_product"] = {
+                    "product": str(
+                        top_product
+                    ),
+                    "value": top_product_value,
+                    "revenue": (
+                        top_product_value
+                        if revenue is not None
+                        else 0.0
+                    ),
+                    "concentration_percentage": float(
+                        concentration_percentage
+                    ),
+                    "risk_level": risk_level,
+                }
+
+                if revenue is not None:
+
+                    insights[
+                        "product_concentration_insight"
+                    ] = (
+                        f"Top product '{top_product}' "
+                        f"generates "
+                        f"₹{top_product_value:,.2f}, "
+                        f"representing "
+                        f"{concentration_percentage:.2f}% "
+                        f"of total revenue."
+                    )
 
     return summary, insights
-
 
 def build_ai_context(
     df: pd.DataFrame,
