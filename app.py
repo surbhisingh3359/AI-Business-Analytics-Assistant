@@ -2052,7 +2052,7 @@ def view_data(
 ) -> None:
     """Render the dataset structure and quality profile."""
 
-    render_section(
+    section_header(
         "01 · Data",
         "Dataset overview",
         (
