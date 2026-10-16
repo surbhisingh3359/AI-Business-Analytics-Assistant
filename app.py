@@ -1281,7 +1281,7 @@ def render_metric_row(cards: Sequence[Sequence[Any]]) -> None:
         label, value, note = card[0], card[1], card[2]
         text_value = bool(card[3]) if len(card) > 3 else False
         with container:
-            render_metric_card(label, value, note, text_value=text_value)
+            metric_card(label, value, note)
 
 
 def status_pill(status: Any) -> str:
