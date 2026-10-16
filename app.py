@@ -996,6 +996,50 @@ def render_styles() -> None:
                 line-height: 1.65;
             }}
 
+            .metric-card {{
+                height: 100%;
+                box-sizing: border-box;
+                padding: 1rem 1.05rem;
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 1rem;
+                box-shadow: var(--shadow);
+                transition:
+                    transform 180ms ease,
+                    border-color 180ms ease,
+                    box-shadow 180ms ease;
+            }}
+
+            .metric-card:hover {{
+                transform: translateY(-2px);
+                border-color: var(--accent);
+            }}
+
+            .metric-label {{
+                margin-bottom: 0.35rem;
+                color: var(--muted);
+                font-size: 0.76rem;
+                font-weight: 750;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+            }}
+
+            .metric-value {{
+                color: var(--text);
+                font-size: 1.55rem;
+                font-weight: 800;
+                line-height: 1.2;
+                letter-spacing: -0.035em;
+                overflow-wrap: anywhere;
+            }}
+
+            .metric-description {{
+                margin-top: 0.35rem;
+                color: var(--muted);
+                font-size: 0.8rem;
+                line-height: 1.45;
+            }}
+
             .panel {{
                 height: 100%;
                 box-sizing: border-box;
