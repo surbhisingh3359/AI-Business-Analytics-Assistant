@@ -26,7 +26,7 @@ def section_header(
     st.markdown(
         f"""
         <div class="section-header">
-            <div class="section-eyebrow">{safe_eyebrow}</div>
+            <div class="eyebrow">{safe_eyebrow}</div>
             <h2>{safe_title}</h2>
             {description_html}
         </div>
