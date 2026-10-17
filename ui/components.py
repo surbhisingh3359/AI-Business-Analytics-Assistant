@@ -1,4 +1,11 @@
+import html
+
 import streamlit as st
+
+
+def _safe_text(value: object) -> str:
+    """Escape text before rendering it inside HTML."""
+    return html.escape(str(value))
 
 
 def section_header(
@@ -8,12 +15,20 @@ def section_header(
 ) -> None:
     """Render a consistent section header across the dashboard."""
 
+    safe_eyebrow = _safe_text(eyebrow)
+    safe_title = _safe_text(title)
+    safe_description = _safe_text(description)
+
+    description_html = (
+        f"<p>{safe_description}</p>" if description else ""
+    )
+
     st.markdown(
         f"""
         <div class="section-header">
-            <div class="section-eyebrow">{eyebrow}</div>
-            <h2>{title}</h2>
-            {f'<p>{description}</p>' if description else ''}
+            <div class="section-eyebrow">{safe_eyebrow}</div>
+            <h2>{safe_title}</h2>
+            {description_html}
         </div>
         """,
         unsafe_allow_html=True,
