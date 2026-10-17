@@ -1259,31 +1259,7 @@ def render_section(eyebrow: str, title: str, copy: str) -> None:
     )
 
 
-def render_metric_card(
-    label: str,
-    value: str,
-    note: str = "",
-    text_value: bool = False,
-) -> None:
-    """Render one lightweight, visually consistent metric card.
 
-    Set ``text_value`` for values that are words rather than numbers, so long
-    strings such as file names wrap instead of overflowing the card.
-    """
-
-    note_markup = (
-        f'<div class="panel-note">{safe_text(note)}</div>' if note else ""
-    )
-    value_class = "panel-value panel-value-text" if text_value else "panel-value"
-    render_html(
-        f"""
-        <div class="panel">
-            <div class="panel-label">{safe_text(label)}</div>
-            <div class="{value_class}">{safe_text(value)}</div>
-            {note_markup}
-        </div>
-        """
-    )
 
 
 def render_notice(
@@ -1730,7 +1706,7 @@ def render_prediction_result(prediction: Mapping[str, Any]) -> None:
             metric_columns, regression_metrics
         ):
             with container:
-                render_metric_card(
+                metric_card(
                     label,
                     format_number(metrics.get(key), decimals),
                     f"Baseline: {format_number(baseline_metrics.get(key), decimals)}",
@@ -1759,7 +1735,7 @@ def render_prediction_result(prediction: Mapping[str, Any]) -> None:
         )
         for container, (label, key) in zip(metric_columns, classification_metrics):
             with container:
-                render_metric_card(
+                metric_card(
                     label,
                     format_percent(metrics.get(key)),
                     f"Baseline: {format_percent(baseline_metrics.get(key))}",
