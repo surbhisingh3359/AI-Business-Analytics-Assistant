@@ -1245,7 +1245,7 @@ def render_styles() -> None:
 # ---------------------------------------------------------------------------
 
 
-def render_section(eyebrow: str, title: str, copy: str) -> None:
+def section_header(eyebrow: str, title: str, copy: str) -> None:
     """Render a consistently styled view header."""
 
     render_html(
@@ -1686,14 +1686,14 @@ def render_prediction_result(prediction: Mapping[str, Any]) -> None:
     if not isinstance(quality, Mapping):
         quality = {}
 
-    render_section(
-        "Model result",
-        "Held-out validation",
-        (
-            "Performance is compared with a simple baseline, rather than "
-            "reported only on the data used to fit the model."
-        ),
-    )
+    section_header(
+    "Model result",
+    "Held-out validation",
+    (
+        "Performance is compared with a simple baseline, rather than "
+        "reported only on the data used to fit the model."
+    ),
+)
 
     if task == "regression":
         metric_columns = st.columns(3)
@@ -1863,7 +1863,7 @@ def render_prediction_result(prediction: Mapping[str, Any]) -> None:
         }
     )
 
-    render_section(
+    section_header(
         "Validation sample",
         "Actual versus predicted",
         "The view is capped to keep the dashboard fast and legible.",
@@ -2268,7 +2268,7 @@ def render_insights(insights: Any) -> None:
 def view_descriptive(result: Mapping[str, Any]) -> None:
     """Render the descriptive evidence produced by the pipeline."""
 
-    render_section(
+    section_header(
         "02 · Descriptive",
         "What happened?",
         "Key patterns and comparisons discovered by the analytics pipeline.",
@@ -2280,7 +2280,7 @@ def view_descriptive(result: Mapping[str, Any]) -> None:
 def view_predictive(dataframe: pd.DataFrame, signature: str) -> None:
     """Render the explicitly triggered, bounded predictive workflow."""
 
-    render_section(
+    section_header(
         "03 · What's Next?",
         "What is the data telling us about the future?",
         (
@@ -2451,7 +2451,7 @@ def view_predictive(dataframe: pd.DataFrame, signature: str) -> None:
 def view_decisions(result: Mapping[str, Any]) -> None:
     """Render decisions followed by auditable execution detail."""
 
-    render_section(
+    section_header(
         "04 · Decision Support",
         "What should the business do next?",
         (
@@ -2506,7 +2506,7 @@ def view_decisions(result: Mapping[str, Any]) -> None:
                     for limitation in limitations:
                         st.write(f"• {limitation}")
 
-    render_section(
+    section_header(
         "Analytical execution",
         "How recommendations were tested",
         (
@@ -2566,7 +2566,7 @@ def view_technical(
 ) -> None:
     """Expose diagnostics without crowding the business-facing views."""
 
-    render_section(
+    section_header(
         "05 · Technical",
         "Diagnostics and traceability",
         (
@@ -2745,3 +2745,4 @@ def main() -> None:
 
 
 main()
+
