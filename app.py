@@ -2075,11 +2075,11 @@ def view_data(
             "CSV upload · results are scoped to this exact file.",
         )
         with source_col:
-           metric_card(
-        "Memory footprint",
-        f"{float(profile['memory_mb']):.1f} MB",
-        "In-memory DataFrame estimate",
-    )
+            metric_card(
+                "Memory footprint",
+                f"{float(profile['memory_mb']):.1f} MB",
+                "In-memory DataFrame estimate",
+            )
 
     render_metric_row(
         [
