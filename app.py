@@ -1245,19 +1245,6 @@ def render_styles() -> None:
 # ---------------------------------------------------------------------------
 
 
-def section_header(eyebrow: str, title: str, copy: str) -> None:
-    """Render a consistently styled view header."""
-
-    render_html(
-        f"""
-        <div class="section-header">
-            <div class="eyebrow">{safe_text(eyebrow)}</div>
-            <h2>{safe_text(title)}</h2>
-            <p>{safe_text(copy)}</p>
-        </div>
-        """
-    )
-
 
 
 
@@ -2744,4 +2731,5 @@ def main() -> None:
 
 
 main()
+
 
