@@ -1290,8 +1290,8 @@ def render_notice(
 def render_metric_row(cards: Sequence[Sequence[Any]]) -> None:
     """Render a row of metric cards.
 
-    Each card is ``(label, value, note)`` with an optional fourth element that
-    marks the value as text rather than a number.
+    Each card is ``(label, value, note)`` with an optional fourth element
+    retained for backwards compatibility.
     """
 
     if not cards:
@@ -1299,7 +1299,6 @@ def render_metric_row(cards: Sequence[Sequence[Any]]) -> None:
     columns = st.columns(len(cards))
     for container, card in zip(columns, cards):
         label, value, note = card[0], card[1], card[2]
-        text_value = bool(card[3]) if len(card) > 3 else False
         with container:
             metric_card(label, value, note)
 
