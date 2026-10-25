@@ -34,7 +34,7 @@ from src.predictive_analysis import (
     run_prediction,
 )
 
-from ui.components import metric_card, section_header, status_badge
+from ui.components import metric_card, notice_card, section_header, status_badge
 
 APP_TITLE = "AI Business Analytics Copilot"
 APP_TAGLINE = "From raw data to insights, predictions, and decisions"
@@ -1249,31 +1249,6 @@ def render_styles() -> None:
 
 
 
-def render_notice(
-    label: str,
-    title: str,
-    copy: str,
-    tone: str = "accent",
-) -> None:
-    """Render a compact explanation card with a semantic colour."""
-
-    tone_class = {
-        "success": "notice-success",
-        "warning": "notice-warning",
-        "danger": "notice-danger",
-    }.get(tone, "")
-
-    render_html(
-        f"""
-        <div class="panel notice {tone_class}">
-            <div class="panel-label">{safe_text(label)}</div>
-            <div class="notice-title">{safe_text(title)}</div>
-            <p class="notice-copy">{safe_text(copy)}</p>
-        </div>
-        """
-    )
-
-
 def render_metric_row(cards: Sequence[Sequence[Any]]) -> None:
     """Render a row of metric cards.
 
@@ -1752,14 +1727,14 @@ def render_prediction_result(prediction: Mapping[str, Any]) -> None:
     model_is_better = bool(quality.get("model_is_better", False))
 
     if meaningful:
-        render_notice(
+        notice_card(
             "Model quality",
             "Meaningfully better than baseline",
             quality_copy,
             tone="success",
         )
     elif model_is_better:
-        render_notice(
+        notice_card(
             "Model quality",
             "Marginal improvement — needs review",
             (
@@ -1770,7 +1745,7 @@ def render_prediction_result(prediction: Mapping[str, Any]) -> None:
             tone="warning",
         )
     else:
-        render_notice(
+        notice_card(
             "Model quality",
             "Needs review",
             (
@@ -1812,13 +1787,13 @@ def render_prediction_result(prediction: Mapping[str, Any]) -> None:
     excluded = prediction.get("excluded_features", [])
     feature_one, feature_two = st.columns(2)
     with feature_one:
-        render_notice(
+        notice_card(
             "Features used",
             f"{len(features) if isinstance(features, list) else 0} eligible features",
             html_list(features, "No feature names returned."),
         )
     with feature_two:
-        render_notice(
+        notice_card(
             "Excluded features",
             f"{len(excluded) if isinstance(excluded, list) else 0} excluded",
             html_list(
@@ -1918,7 +1893,7 @@ def view_overview(
     )
 
     if profile is None:
-        render_notice(
+        notice_card(
             "Start here",
             "Upload a CSV in the sidebar",
             (
@@ -1968,7 +1943,7 @@ def view_overview(
     )
 
     if result is None:
-        render_notice(
+        notice_card(
             "Next step",
             "Run the deterministic analysis",
             (
@@ -1991,7 +1966,7 @@ def view_overview(
     skipped = result.get("skipped_executions", [])
 
     if isinstance(failed, list) and failed:
-        render_notice(
+        notice_card(
             "Workspace status",
             "Your business analysis is ready",
             (
@@ -2001,7 +1976,7 @@ def view_overview(
             tone="warning",
         )
     else:
-        render_notice(
+        notice_card(
             "Pipeline status",
             "Your business analysis is ready",
             "The analytical pipeline has transformed the uploaded dataset into business findings, predictive signals, and decision support.",
@@ -2044,7 +2019,7 @@ def view_overview(
             (item for item in insights if isinstance(item, Mapping)), None
         )
         if headline is not None:
-            render_notice(
+            notice_card(
                 "Top finding",
                 str(headline.get("title", "Untitled insight")),
                 str(headline.get("finding", "No explanation supplied.")),
@@ -2069,7 +2044,7 @@ def view_data(
 
     file_col, source_col = st.columns([3, 1])
     with file_col:
-        render_notice(
+        notice_card(
             "Active dataset",
             file_name,
             "CSV upload · results are scoped to this exact file.",
@@ -2100,7 +2075,7 @@ def view_data(
 
     quality_one, quality_two = st.columns(2)
     with quality_one:
-        render_notice(
+        notice_card(
             "Field mix",
             (
                 f"{len(profile['numeric_columns']):,} measures · "
@@ -2116,7 +2091,7 @@ def view_data(
             int(profile["missing_cells"]) == 0
             and int(profile["duplicate_rows"]) == 0
         )
-        render_notice(
+        notice_card(
             "Quality checkpoint",
             (
                 "Dataset looks complete"
@@ -2279,7 +2254,7 @@ def view_predictive(dataframe: pd.DataFrame, signature: str) -> None:
     try:
         candidates = detect_prediction_targets(dataframe)
     except (TypeError, ValueError) as exc:
-        render_notice(
+        notice_card(
             "Predictive readiness",
             "Target detection is unavailable",
             str(exc),
@@ -2294,7 +2269,7 @@ def view_predictive(dataframe: pd.DataFrame, signature: str) -> None:
     )
 
     if not targets:
-        render_notice(
+        notice_card(
             "Predictive readiness",
             "No suitable prediction target detected",
             (
@@ -2325,7 +2300,7 @@ def view_predictive(dataframe: pd.DataFrame, signature: str) -> None:
 
     readiness = target_readiness(dataframe, selected_target)
     with readiness_column:
-        render_notice(
+        notice_card(
             "Predictive readiness",
             "Ready to model" if readiness.get("ready") else "Not ready",
             (
@@ -2338,13 +2313,13 @@ def view_predictive(dataframe: pd.DataFrame, signature: str) -> None:
 
     candidate_one, candidate_two = st.columns(2)
     with candidate_one:
-        render_notice(
+        notice_card(
             "Regression candidates",
             f"{len(regression_candidates):,} numeric targets",
             html_list(regression_candidates, "None detected."),
         )
     with candidate_two:
-        render_notice(
+        notice_card(
             "Classification candidates",
             f"{len(classification_candidates):,} categorical targets",
             html_list(classification_candidates, "None detected."),
@@ -2413,7 +2388,7 @@ def view_predictive(dataframe: pd.DataFrame, signature: str) -> None:
 
     error_message = st.session_state.prediction_errors.get(model_key)
     if error_message:
-        render_notice(
+        notice_card(
             "Prediction run",
             "Model evaluation could not be completed",
             error_message,
@@ -2423,7 +2398,7 @@ def view_predictive(dataframe: pd.DataFrame, signature: str) -> None:
     if existing_result is not None:
         render_prediction_result(existing_result)
     elif readiness.get("ready"):
-        render_notice(
+        notice_card(
             "Next step",
             "Train one baseline model",
             (
@@ -2660,7 +2635,7 @@ def main() -> None:
     topbar_slot = st.empty()
 
     if load_error is not None:
-        render_notice(
+        notice_card(
             "Dataset import",
             "The uploaded file could not be read",
             load_error,
@@ -2686,7 +2661,7 @@ def main() -> None:
     )
 
     if st.session_state.analysis_error:
-        render_notice(
+        notice_card(
             "Business analysis",
             "Analysis could not be completed",
             str(st.session_state.analysis_error),
