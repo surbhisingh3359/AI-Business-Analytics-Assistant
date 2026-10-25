@@ -53,6 +53,34 @@ def metric_card(
         unsafe_allow_html=True,
     )
 
+def notice_card(
+    label: str,
+    title: str,
+    copy: str,
+    tone: str = "accent",
+) -> None:
+    """Render a compact explanation card with a semantic tone."""
+
+    tone_class = {
+        "success": "notice-success",
+        "warning": "notice-warning",
+        "danger": "notice-danger",
+    }.get(tone, "")
+
+    safe_label = _safe_text(label)
+    safe_title = _safe_text(title)
+    safe_copy = _safe_text(copy)
+
+    st.markdown(
+        f"""
+        <div class="panel notice {tone_class}">
+            <div class="panel-label">{safe_label}</div>
+            <div class="notice-title">{safe_title}</div>
+            <p class="notice-copy">{safe_copy}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 def status_badge(
     label: str,
