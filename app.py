@@ -34,7 +34,13 @@ from src.predictive_analysis import (
     run_prediction,
 )
 
-from ui.components import metric_card, notice_card, section_header, status_badge
+from ui.components import (
+    metric_card,
+    notice_card,
+    section_header,
+    status_badge,
+    status_pill,
+)
 
 APP_TITLE = "AI Business Analytics Copilot"
 APP_TAGLINE = "From raw data to insights, predictions, and decisions"
@@ -1265,19 +1271,6 @@ def render_metric_row(cards: Sequence[Sequence[Any]]) -> None:
             metric_card(label, value, note)
 
 
-def status_pill(status: Any) -> str:
-    """Build a safe status badge for execution cards."""
-
-    normalized = str(status or "unknown").lower()
-    class_name = {
-        "completed": "status-completed",
-        "skipped": "status-skipped",
-        "failed": "status-failed",
-    }.get(normalized, "status-skipped")
-    return (
-        f'<span class="status-pill {class_name}">'
-        f"{safe_text(normalized)}</span>"
-    )
 
 
 # ---------------------------------------------------------------------------
