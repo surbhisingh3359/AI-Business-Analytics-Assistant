@@ -82,6 +82,21 @@ def notice_card(
         unsafe_allow_html=True,
     )
 
+def status_pill(status: object) -> str:
+    """Build a safe status pill for execution cards."""
+
+    normalized = str(status or "unknown").lower()
+    class_name = {
+        "completed": "status-completed",
+        "skipped": "status-skipped",
+        "failed": "status-failed",
+    }.get(normalized, "status-skipped")
+
+    return (
+        f'<span class="status-pill {class_name}">'
+        f"{_safe_text(normalized)}</span>"
+    )
+
 def status_badge(
     label: str,
     status: str = "neutral",
