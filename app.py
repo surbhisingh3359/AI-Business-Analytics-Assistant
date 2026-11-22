@@ -1,4 +1,4 @@
-"""Streamlit interface for the AI Business Analytics Assistant.
+﻿"""Streamlit interface for the AI Business Analytics Assistant.
 
 The interface stays a thin presentation layer around the deterministic pipeline
 in ``src``. It is arranged as an app shell: a floating dock switches between
@@ -1473,6 +1473,28 @@ def execute_analysis(
 # Predictive helpers
 # ---------------------------------------------------------------------------
 
+def _store_prediction_result(
+    model_key: str,
+    prediction: Mapping[str, Any],
+) -> None:
+    """Store a successful prediction and clear its previous error."""
+
+    updated_results = dict(st.session_state.predictive_results)
+    updated_results[model_key] = prediction
+    st.session_state.predictive_results = updated_results
+
+    updated_errors = dict(st.session_state.prediction_errors)
+    updated_errors.pop(model_key, None)
+    st.session_state.prediction_errors = updated_errors
+
+
+def _store_prediction_error(model_key: str, message: str) -> None:
+    """Store an error for a specific dataset and prediction target."""
+
+    updated_errors = dict(st.session_state.prediction_errors)
+    updated_errors[model_key] = message
+    st.session_state.prediction_errors = updated_errors
+
 
 def target_readiness(dataframe: pd.DataFrame, target: str) -> dict[str, Any]:
     """Check UI-level readiness before a user may start a model run."""
@@ -2355,26 +2377,16 @@ def view_predictive(dataframe: pd.DataFrame, signature: str) -> None:
                     expanded=False,
                 )
 
-            updated_results = dict(st.session_state.predictive_results)
-            updated_results[model_key] = prediction
-            st.session_state.predictive_results = updated_results
-
-            updated_errors = dict(st.session_state.prediction_errors)
-            updated_errors.pop(model_key, None)
-            st.session_state.prediction_errors = updated_errors
+            _store_prediction_result(model_key, prediction)
             existing_result = prediction
-
         except (TypeError, ValueError, KeyError) as exc:
-            updated_errors = dict(st.session_state.prediction_errors)
-            updated_errors[model_key] = str(exc)
-            st.session_state.prediction_errors = updated_errors
+            _store_prediction_error(model_key, str(exc))
             existing_result = None
         except Exception as exc:  # pragma: no cover - defensive UI boundary
-            updated_errors = dict(st.session_state.prediction_errors)
-            updated_errors[model_key] = (
-                f"The predictive workflow stopped unexpectedly. Details: {exc}"
+            _store_prediction_error(
+                model_key,
+                f"The predictive workflow stopped unexpectedly. Details: {exc}",
             )
-            st.session_state.prediction_errors = updated_errors
             existing_result = None
         finally:
             st.session_state.prediction_busy = False
