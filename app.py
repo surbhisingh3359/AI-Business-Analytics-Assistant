@@ -1947,7 +1947,7 @@ def view_overview(
                 "Scoped to this file",
                 True,
             ),
-            ("Rows", f"{int(profile['rows']):,}", "Parsed from the CSV"),
+            ("Rows", f"{int(profile['rows']):,}", "Records parsed from the uploaded file"),
             ("Columns", f"{int(profile['columns']):,}", "Fields available"),
             (
                 "Missing values",
