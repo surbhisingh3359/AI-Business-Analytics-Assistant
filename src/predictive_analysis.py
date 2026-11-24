@@ -480,24 +480,15 @@ def split_data(
     task: str,
     test_size: float = 0.2,
     random_state: int = 42,
+    chronological: bool = False,
 ):
-    """Split data safely for model validation."""
+    """Split data safely for random or chronological validation."""
 
-    if not isinstance(
-        X,
-        pd.DataFrame,
-    ):
-        raise TypeError(
-            "X must be a pandas DataFrame."
-        )
+    if not isinstance(X, pd.DataFrame):
+        raise TypeError("X must be a pandas DataFrame.")
 
-    if not isinstance(
-        y,
-        pd.Series,
-    ):
-        raise TypeError(
-            "y must be a pandas Series."
-        )
+    if not isinstance(y, pd.Series):
+        raise TypeError("y must be a pandas Series.")
 
     if len(X) != len(y):
         raise ValueError(
@@ -509,29 +500,21 @@ def split_data(
             "At least 5 rows are required for train/test splitting."
         )
 
-    _validate_test_size(
-        test_size
-    )
+    _validate_test_size(test_size)
 
     test_rows = max(
         2,
-        int(
-            round(
-                len(X)
-                * float(test_size)
-            )
-        ),
+        int(round(len(X) * float(test_size))),
     )
 
     stratify = None
 
-    if task == "classification":
+    # Random validation retains the existing classification
+    # stratification behavior.
+    if task == "classification" and not chronological:
 
         class_counts = y.value_counts()
-
-        number_of_classes = len(
-            class_counts
-        )
+        number_of_classes = len(class_counts)
 
         if (
             number_of_classes > 1
@@ -545,21 +528,51 @@ def split_data(
 
             if (
                 test_rows < len(X)
-                and len(X) - test_rows
-                >= number_of_classes
+                and len(X) - test_rows >= number_of_classes
             ):
                 stratify = y
 
     if test_rows >= len(X):
-
         raise ValueError(
             "The test set must contain fewer rows "
             "than the training set."
         )
 
-    actual_test_size = (
-        test_rows / len(X)
-    )
+    # Chronological validation: earlier records train the model;
+    # later records evaluate it. No shuffling or stratification.
+    if chronological:
+
+        split_position = len(X) - test_rows
+
+        X_train = X.iloc[:split_position]
+        X_test = X.iloc[split_position:]
+
+        y_train = y.iloc[:split_position]
+        y_test = y.iloc[split_position:]
+
+        if task == "classification":
+
+            if y_train.nunique() < 2:
+                raise ValueError(
+                    "Chronological training data must contain "
+                    "at least two target classes."
+                )
+
+            if set(y_train.unique()) != set(y.unique()):
+                raise ValueError(
+                    "The chronological training period does not "
+                    "contain all target classes. More historical "
+                    "data may be required for reliable validation."
+                )
+
+        return (
+            X_train,
+            X_test,
+            y_train,
+            y_test,
+        )
+
+    actual_test_size = test_rows / len(X)
 
     return train_test_split(
         X,
@@ -568,7 +581,6 @@ def split_data(
         random_state=random_state,
         stratify=stratify,
     )
-
 
 # =========================================================
 # MODEL
@@ -882,12 +894,15 @@ def train_predictive_model(
     target: str,
     test_size: float = 0.2,
     random_state: int = 42,
+    time_column: str | None = None,
 ) -> dict[str, Any]:
     """
     Train the bounded predictive model.
 
-    Large datasets are deterministically downsampled for the
-    baseline model. The source DataFrame is never modified.
+    Large datasets are bounded for the baseline model.
+    Random validation uses deterministic random sampling;
+    chronological validation retains the latest observations.
+    The source DataFrame is never modified.
     """
 
     validate_dataframe(
@@ -909,6 +924,39 @@ def train_predictive_model(
         target,
     )
 
+    if time_column is not None:
+
+        if (
+            not isinstance(time_column, str)
+            or not time_column.strip()
+        ):
+            raise ValueError(
+                "time_column must be a non-empty column name."
+            )
+
+        if time_column not in dataframe.columns:
+            raise ValueError(
+                f"Time column '{time_column}' was not found."
+            )
+
+        if time_column == target:
+            raise ValueError(
+                "The time column cannot be the prediction target."
+            )
+
+        parsed_dates = pd.to_datetime(
+            dataframe[time_column],
+            errors="coerce",
+            utc=True,
+        )
+
+        if parsed_dates.isna().any():
+            raise ValueError(
+                f"Time column '{time_column}' contains missing "
+                "or invalid date values. Please clean these values "
+                "before chronological validation."
+            )
+
     task = detect_prediction_task(
         dataframe,
         target,
@@ -918,26 +966,58 @@ def train_predictive_model(
     # Bounded modeling dataset
     # ---------------------------------------------------------
 
-    modeling_dataframe = dataframe
+    modeling_dataframe = dataframe.copy()
 
     was_sampled = False
 
-    if len(
-        modeling_dataframe
-    ) > MAX_MODEL_ROWS:
+    if time_column is not None:
+
+        # Store parsed timestamps and sort oldest to newest.
+        modeling_dataframe[time_column] = parsed_dates
 
         modeling_dataframe = (
             modeling_dataframe
-            .sample(
-                n=MAX_MODEL_ROWS,
-                random_state=random_state,
+            .sort_values(
+                by=time_column,
+                ascending=True,
+                kind="mergesort",
             )
-            .reset_index(
-                drop=True
-            )
+            .reset_index(drop=True)
         )
 
+    if len(modeling_dataframe) > MAX_MODEL_ROWS:
+
+        if time_column is not None:
+
+            # Preserve the most recent observations.
+            modeling_dataframe = (
+                modeling_dataframe
+                .tail(MAX_MODEL_ROWS)
+                .reset_index(drop=True)
+            )
+
+        else:
+
+            # Preserve the existing random sampling behavior.
+            modeling_dataframe = (
+                modeling_dataframe
+                .sample(
+                    n=MAX_MODEL_ROWS,
+                    random_state=random_state,
+                )
+                .reset_index(drop=True)
+            )
+
         was_sampled = True
+
+    # The selected time column controls ordering, but must not
+    # become a predictor.
+    feature_dataframe = modeling_dataframe
+
+    if time_column is not None:
+        feature_dataframe = modeling_dataframe.drop(
+            columns=[time_column]
+        )
 
     (
         X,
@@ -945,11 +1025,10 @@ def train_predictive_model(
         numeric_features,
         categorical_features,
     ) = prepare_features(
-        modeling_dataframe,
+        feature_dataframe,
         target,
         max_categorical_levels=MAX_CATEGORICAL_LEVELS,
     )
-
     used_feature_columns = [
         *numeric_features,
         *categorical_features,
@@ -976,6 +1055,7 @@ def train_predictive_model(
         task,
         test_size=test_size,
         random_state=random_state,
+        chronological=time_column is not None,
     )
 
     preprocessor = build_preprocessor(
@@ -1126,6 +1206,15 @@ def train_predictive_model(
         "status": "completed",
         "task": task,
         "target": target,
+
+        "validation_method": (
+            "chronological"
+            if time_column is not None
+            else "random"
+        ),
+
+        "time_column": time_column,
+
         "model_name": type(
             model
         ).__name__,
@@ -1177,6 +1266,7 @@ def train_predictive_model(
 def run_prediction(
     dataframe: pd.DataFrame,
     target: str,
+    time_column: str | None = None,
 ) -> dict[str, Any]:
     """
     Run predictive analysis and return UI-safe results.
@@ -1194,14 +1284,22 @@ def run_prediction(
     result = train_predictive_model(
         dataframe,
         target,
+        time_column=time_column,
     )
-
     # Only expose serializable/user-facing values.
     return {
         "status": result["status"],
         "task": result["task"],
         "target": result["target"],
         "model_name": result["model_name"],
+
+        "validation_method": result[
+            "validation_method"
+        ],
+
+        "time_column": result[
+            "time_column"
+        ],
 
         "feature_columns": result[
             "feature_columns"
@@ -1259,3 +1357,4 @@ def run_prediction(
             "actual_values"
         ],
     }
+ 
