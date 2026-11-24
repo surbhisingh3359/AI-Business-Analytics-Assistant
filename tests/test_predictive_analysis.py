@@ -809,3 +809,72 @@ def test_prediction_targets_exclude_identifier_columns():
     assert "category" in (
         result["classification_candidates"]
     )
+
+# =========================================================
+# CHRONOLOGICAL VALIDATION
+# =========================================================
+
+def test_run_prediction_supports_chronological_validation():
+
+    dataframe = pd.DataFrame(
+        {
+            "order_date": [
+                "2025-01-07",
+                "2025-01-02",
+                "2025-01-10",
+                "2025-01-04",
+                "2025-01-12",
+                "2025-01-01",
+                "2025-01-09",
+                "2025-01-03",
+                "2025-01-11",
+                "2025-01-05",
+                "2025-01-08",
+                "2025-01-06",
+            ],
+            "quantity": [
+                7, 2, 10, 4, 12, 1,
+                9, 3, 11, 5, 8, 6,
+            ],
+            "revenue": [
+                70, 20, 100, 40, 120, 10,
+                90, 30, 110, 50, 80, 60,
+            ],
+        }
+    )
+
+    result = run_prediction(
+        dataframe,
+        "revenue",
+        time_column="order_date",
+    )
+
+    assert result["status"] == "completed"
+
+    assert result["validation_method"] == "chronological"
+
+    assert result["time_column"] == "order_date"
+
+    assert "order_date" not in result["feature_columns"]
+
+    # The final two chronological observations
+    # must belong to the test set.
+    assert result["actual_values"] == [110, 120]
+
+
+def test_run_prediction_rejects_invalid_time_column():
+
+    dataframe = pd.DataFrame(
+        {
+            "quantity": list(range(1, 13)),
+            "revenue": list(range(10, 130, 10)),
+        }
+    )
+
+    with pytest.raises(ValueError):
+
+        run_prediction(
+            dataframe,
+            "revenue",
+            time_column="missing_date",
+        )
