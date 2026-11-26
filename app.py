@@ -195,10 +195,15 @@ def dataset_signature(file_bytes: bytes) -> str:
     return hashlib.sha256(file_bytes).hexdigest()
 
 
-def prediction_key(signature: str, target: str) -> str:
-    """Build a state key for one dataset and target combination."""
+def prediction_key(
+    signature: str,
+    target: str,
+    validation_method: str = "random",
+    time_column: str | None = None,
+) -> str:
+    """Build a state key for one dataset, target, and validation configuration."""
 
-    return f"{signature}:{target}"
+    return f"{signature}:{target}:{validation_method}:{time_column or ''}"
 
 
 # ---------------------------------------------------------------------------
@@ -1832,12 +1837,41 @@ def render_prediction_result(prediction: Mapping[str, Any]) -> None:
         st.info("There are not enough held-out observations to draw validation.")
         return
 
+
     validation = pd.DataFrame(
         {
             "Actual": actual_values[:display_length],
             "Predicted": predicted_values[:display_length],
         }
     )
+
+    validation_method = prediction.get("validation_method", "random")
+    time_column = prediction.get("time_column")
+    validation_dates = prediction.get("validation_dates")
+
+    has_validation_dates = (
+        validation_method == "chronological"
+        and isinstance(time_column, str)
+        and bool(time_column)
+        and isinstance(validation_dates, list)
+        and len(validation_dates) >= display_length
+    )
+
+    if has_validation_dates:
+        validation.insert(
+            0,
+            time_column,
+            pd.to_datetime(
+                validation_dates[:display_length],
+                errors="coerce",
+                utc=True,
+            ),
+        )
+    elif validation_method == "chronological":
+        st.warning(
+            "Chronological timestamps were unavailable for this result. "
+            "Validation records are displayed without dates."
+        )
 
     section_header(
         "Validation sample",
@@ -1852,7 +1886,12 @@ def render_prediction_result(prediction: Mapping[str, Any]) -> None:
         )
 
     if task == "regression":
-        st.line_chart(validation, width="stretch")
+        chart_data = validation[["Actual", "Predicted"]]
+
+        if has_validation_dates:
+            chart_data = chart_data.set_index(time_column)
+
+        st.line_chart(chart_data, width="stretch")
     else:
         st.caption(
             "Classification outcomes are shown as a held-out confusion-style count."
@@ -1867,6 +1906,7 @@ def render_prediction_result(prediction: Mapping[str, Any]) -> None:
 
     with st.expander("Inspect validation records", expanded=False):
         st.dataframe(validation, width="stretch", hide_index=True)
+
 
 
 # ---------------------------------------------------------------------------
@@ -2326,6 +2366,45 @@ def view_predictive(dataframe: pd.DataFrame, signature: str) -> None:
             tone="success" if readiness.get("ready") else "warning",
         )
 
+    st.markdown("#### Validation strategy")
+    validation_choice = st.radio(
+        "Choose how the model should be evaluated",
+        options=("Random Holdout", "Chronological Holdout"),
+        horizontal=True,
+        key=f"prediction_validation_{signature[:12]}_{selected_target}",
+        help=(
+            "Random Holdout shuffles eligible records before splitting. "
+            "Chronological Holdout trains on earlier records and validates "
+            "on later records."
+        ),
+    )
+    validation_method = (
+        "chronological"
+        if validation_choice == "Chronological Holdout"
+        else "random"
+    )
+    selected_time_column = None
+
+    if validation_method == "chronological":
+        date_columns = [
+            column for column in dataframe.columns if column != selected_target
+        ]
+        selected_time_column = st.selectbox(
+            "Date column for chronological ordering",
+            options=date_columns,
+            index=None,
+            placeholder="Choose a date column",
+            key=f"prediction_time_column_{signature[:12]}_{selected_target}",
+            help=(
+                "Select the column that represents when each record occurred. "
+                "The app will not guess or automatically choose a date column."
+            ),
+        )
+        if selected_time_column is None:
+            st.info(
+                "Select a date column before training with Chronological Holdout."
+            )
+
     candidate_one, candidate_two = st.columns(2)
     with candidate_one:
         notice_card(
@@ -2346,7 +2425,12 @@ def view_predictive(dataframe: pd.DataFrame, signature: str) -> None:
         "model until you explicitly request it."
     )
 
-    model_key = prediction_key(signature, selected_target)
+    model_key = prediction_key(
+        signature,
+        selected_target,
+        validation_method,
+        selected_time_column,
+    )
     existing_result = st.session_state.predictive_results.get(model_key)
 
     run_model = st.button(
@@ -2359,9 +2443,16 @@ def view_predictive(dataframe: pd.DataFrame, signature: str) -> None:
         width="stretch",
         disabled=(
             not bool(readiness.get("ready"))
+            or (
+                validation_method == "chronological"
+                and selected_time_column is None
+            )
             or bool(st.session_state.prediction_busy)
         ),
-        key=f"run_model_{signature[:12]}_{selected_target}",
+        key=(
+            f"run_model_{signature[:12]}_{selected_target}_"
+            f"{validation_method}_{selected_time_column or 'no-date'}"
+        ),
     )
 
     if run_model:
@@ -2370,7 +2461,11 @@ def view_predictive(dataframe: pd.DataFrame, signature: str) -> None:
             with st.status("Preparing a bounded model run…", expanded=True) as status:
                 st.write("Checking target and feature eligibility.")
                 st.write("Training and evaluating on held-out data.")
-                prediction = run_prediction(dataframe, selected_target)
+                prediction = run_prediction(
+                    dataframe,
+                    selected_target,
+                    time_column=selected_time_column,
+                )
                 status.update(
                     label="Model evaluation complete",
                     state="complete",
