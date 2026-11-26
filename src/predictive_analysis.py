@@ -1202,6 +1202,18 @@ def train_predictive_model(
         for value in y_test
     ]
 
+    # Keep the held-out timestamps aligned with the validation rows.
+    # X_test retains the original row indexes from modeling_dataframe.
+    validation_dates = None
+    if time_column is not None:
+        validation_dates = [
+            pd.Timestamp(value).isoformat()
+            for value in modeling_dataframe.loc[
+                X_test.index,
+                time_column,
+            ].tolist()
+        ]
+
     return {
         "status": "completed",
         "task": task,
@@ -1254,6 +1266,8 @@ def train_predictive_model(
         "predictions": safe_predictions,
 
         "actual_values": safe_actual_values,
+
+        "validation_dates": validation_dates,
 
         "model": pipeline,
     }
@@ -1355,6 +1369,10 @@ def run_prediction(
 
         "actual_values": result[
             "actual_values"
+        ],
+
+        "validation_dates": result[
+            "validation_dates"
         ],
     }
  
