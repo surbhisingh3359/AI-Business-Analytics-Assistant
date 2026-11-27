@@ -1886,10 +1886,12 @@ def render_prediction_result(prediction: Mapping[str, Any]) -> None:
         )
 
     if task == "regression":
-        chart_data = validation[["Actual", "Predicted"]]
-
         if has_validation_dates:
-            chart_data = chart_data.set_index(time_column)
+            chart_data = validation.set_index(time_column)[
+                ["Actual", "Predicted"]
+            ]
+        else:
+            chart_data = validation[["Actual", "Predicted"]]
 
         st.line_chart(chart_data, width="stretch")
     else:
